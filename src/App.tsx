@@ -63,7 +63,7 @@ function App() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className={\`\${report || isAnalyzing ? 'lg:col-span-4' : 'lg:col-span-8 lg:col-start-3'}\`}>
+          <div className={`${report || isAnalyzing ? 'lg:col-span-4' : 'lg:col-span-8 lg:col-start-3'}`}>
             <div className="sticky top-24">
               <InputPanel onAnalyze={handleAnalyze} isLoading={isAnalyzing} />
               

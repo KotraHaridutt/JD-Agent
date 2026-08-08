@@ -38,17 +38,17 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ currentStep }) => {
           
           return (
             <div key={step.key} className="flex items-start gap-3">
-              <div className={\`mt-0.5 rounded-full p-1 border \${
+              <div className={`mt-0.5 rounded-full p-1 border \${
                 isPast ? 'bg-primary-500/20 border-primary-500/50 text-primary-500' :
                 isActive ? 'bg-zinc-700 border-zinc-500 text-zinc-100 animate-pulse' :
                 'bg-background border-border text-zinc-600'
-              }\`}>
+              }`}>
                 {isPast ? <CheckCircle2 size={16} /> : step.icon}
               </div>
               <div className="flex-1">
-                <p className={\`text-sm font-medium \${
+                <p className={`text-sm font-medium \${
                   isActive || isPast ? 'text-zinc-200' : 'text-zinc-600'
-                }\`}>
+                }`}>
                   {step.label}
                 </p>
                 {isActive && currentStep !== 'Done' && (

@@ -12,23 +12,23 @@ const GapItem: React.FC<{ gap: GapInfo }> = ({ gap }) => {
   const isPartial = gap.gap_type === 'PARTIAL_MATCH';
   
   return (
-    <div className={\`p-4 rounded-xl border \${
+    <div className={`p-4 rounded-xl border ${
       isRealGap ? 'bg-red-500/5 border-red-500/20' : 
       isPartial ? 'bg-yellow-500/5 border-yellow-500/20' : 
       'bg-green-500/5 border-green-500/20'
-    }\`}>
+    }`}>
       <div className="flex items-start gap-3">
-        <div className={\`mt-0.5 \${
+        <div className={`mt-0.5 ${
           isRealGap ? 'text-red-400' : 
           isPartial ? 'text-yellow-400' : 
           'text-green-400'
-        }\`}>
+        }`}>
           {isRealGap ? <XCircle size={16} /> : isPartial ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
         </div>
         <div className="flex-1">
           <div className="flex flex-wrap items-baseline gap-2 mb-1">
-            <h5 className="font-semibold text-sm text-zinc-200">{gap.jd_says}</h5>
-            <span className="text-xs text-zinc-500">→ means: {gap.jd_means}</span>
+            <h5 className="font-semibold text-sm text-zinc-200">JD proof: {gap.jd_says}</h5>
+            <span className="text-xs text-zinc-500">Interpretation: {gap.jd_means}</span>
           </div>
           
           <p className="text-xs text-zinc-400 mb-3">You have: <span className="text-zinc-300 font-medium">{gap.candidate_has}</span></p>
@@ -86,7 +86,7 @@ const CompanyCard: React.FC<{ report: CompanyReport }> = ({ report }) => {
             <p className="text-sm text-zinc-400">{report.role}</p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className={\`text-xs font-bold px-3 py-1 rounded-full border \${fit.bg} \${fit.color} \${fit.border}\`}>
+            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${fit.bg} ${fit.color} ${fit.border}`}>
               {fit.text}
             </span>
             <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
@@ -101,6 +101,35 @@ const CompanyCard: React.FC<{ report: CompanyReport }> = ({ report }) => {
               <CheckCircle2 size={12} /> {strength}
             </span>
           ))}
+        </div>
+
+        <div className="rounded-xl border border-border/50 bg-background/40 p-4 space-y-2">
+          <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-wider">Proof</h4>
+          <div className="text-xs text-zinc-500">Source: {report.source_title || report.company}</div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+            {report.jd_url !== 'simulated' ? (
+              <a href={report.jd_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors">
+                <ExternalLink size={14} /> Open JD source
+              </a>
+            ) : (
+              <span className="text-zinc-500">JD source simulated for this company</span>
+            )}
+            <span className="text-zinc-600">|</span>
+            <span className="text-xs text-zinc-500">Freshness: {report.jd_freshness || 'not provided'}</span>
+          </div>
+          {report.jd_url !== 'simulated' && (
+            <a
+              href={report.jd_url}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-xs text-primary-400 hover:text-primary-300 underline underline-offset-2 break-all"
+            >
+              {report.jd_url}
+            </a>
+          )}
+          {report.proof_note && (
+            <p className="text-xs text-zinc-400 leading-relaxed">{report.proof_note}</p>
+          )}
         </div>
       </div>
 

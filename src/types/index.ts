@@ -26,6 +26,8 @@ export interface CompanyReport {
   company: string;
   role: string;
   jd_url: string;
+  proof_note: string;
+  source_title: string;
   jd_freshness: string;
   fit_label: 'APPLY_NOW' | 'APPLY_AFTER_PREP' | 'SKIP';
   match_score: number;

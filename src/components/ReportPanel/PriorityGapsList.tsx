@@ -8,6 +8,8 @@ interface PriorityGapsListProps {
 }
 
 const PriorityGapsList: React.FC<PriorityGapsListProps> = ({ gaps }) => {
+  const safeGaps = Array.isArray(gaps) ? gaps : [];
+
   return (
     <motion.div 
       initial={{ y: 20, opacity: 0 }}
@@ -20,7 +22,7 @@ const PriorityGapsList: React.FC<PriorityGapsListProps> = ({ gaps }) => {
         Priority Overlapping Gaps
       </h3>
       <div className="space-y-4">
-        {gaps.map((gap, i) => (
+        {safeGaps.map((gap, i) => (
           <div key={i} className="bg-background/50 border border-border rounded-xl p-4 hover:border-border/80 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <h4 className="font-semibold text-zinc-100">{gap.skill}</h4>

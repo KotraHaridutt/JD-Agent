@@ -8,6 +8,8 @@ interface TodayActionProps {
 }
 
 const TodayAction: React.FC<TodayActionProps> = ({ action }) => {
+  const helpsFor = Array.isArray(action.helps_for) ? action.helps_for : [];
+
   return (
     <motion.div 
       initial={{ y: 20, opacity: 0 }}
@@ -56,7 +58,7 @@ const TodayAction: React.FC<TodayActionProps> = ({ action }) => {
                 <Target size={12} /> Helps For
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
-                {action.helps_for.map(company => (
+                {helpsFor.map(company => (
                   <span key={company} className="text-xs bg-surface border border-border px-2 py-1 rounded-md text-zinc-300">
                     {company}
                   </span>
