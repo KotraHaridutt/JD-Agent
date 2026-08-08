@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-import analyzeHandler from './api/analyze'
+import { analyzeRequest } from './api/analyze'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -18,23 +18,16 @@ function devAnalyzePlugin(mode: string): Plugin {
 
         try {
           const body = await readRequestBody(req);
-          const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url}`, {
-            method: 'POST',
-            headers: req.headers as HeadersInit,
-            body
-          });
-
-          const response = await analyzeHandler(request);
-          res.statusCode = response.status;
-
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-
-          const arrayBuffer = await response.arrayBuffer();
-          res.end(Buffer.from(arrayBuffer));
+          const result = await analyzeRequest(JSON.parse(body));
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(result));
         } catch (error) {
-          next(error as Error);
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500;
+          res.statusCode = status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: message, details: (error as any)?.details }));
         }
       });
     }

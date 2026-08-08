@@ -4,21 +4,39 @@ type AnalyzeRequest = {
   useWebSearch?: boolean;
 };
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+export default async function handler(req: any, res: any): Promise<void> {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
   }
 
+  try {
+    const body = (await readBody(req)) as AnalyzeRequest;
+    const result = await analyzeRequest(body);
+    sendJson(res, 200, result);
+  } catch (error: any) {
+    const status = typeof error?.status === 'number' ? error.status : 500;
+    sendJson(res, status, {
+      error: error?.message ?? 'Unexpected server error',
+      details: error?.details
+    });
+  }
+}
+
+export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return jsonResponse({ error: 'OPENAI_API_KEY is not configured on the server' }, 500);
+    const error: any = new Error('OPENAI_API_KEY is not configured on the server');
+    error.status = 500;
+    throw error;
   }
 
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
-  const body = (await request.json()) as AnalyzeRequest;
 
   if (!body.system || !body.message) {
-    return jsonResponse({ error: 'Missing system or message' }, 400);
+    const error: any = new Error('Missing system or message');
+    error.status = 400;
+    throw error;
   }
 
   const payload: Record<string, unknown> = {
@@ -57,34 +75,30 @@ export default async function handler(request: Request): Promise<Response> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    return jsonResponse(
-      {
-        error: `OpenAI API error: ${response.status} ${response.statusText}`,
-        details: errorText
-      },
-      response.status
-    );
+    const error: any = new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    error.status = response.status;
+    error.details = errorText;
+    throw error;
   }
 
   const data = await response.json();
   const rawText = extractResponseText(data);
 
   if (!rawText) {
-    return jsonResponse({ error: 'No text returned in the OpenAI API response' }, 502);
+    const error: any = new Error('No text returned in the OpenAI API response');
+    error.status = 502;
+    throw error;
   }
 
   const cleanText = rawText.replace(/```json|```/g, '').trim();
 
   try {
-    return jsonResponse(parseJsonResponse(cleanText));
+    return parseJsonResponse(cleanText);
   } catch (error: any) {
-    return jsonResponse(
-      {
-        error: 'Unable to parse JSON response',
-        details: error?.message ?? 'Unknown parsing error'
-      },
-      502
-    );
+    const parseError: any = new Error('Unable to parse JSON response');
+    parseError.status = 502;
+    parseError.details = error?.message ?? 'Unknown parsing error';
+    throw parseError;
   }
 }
 
@@ -116,11 +130,28 @@ function parseJsonResponse(text: string): any {
   }
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
+async function readBody(req: any): Promise<AnalyzeRequest> {
+  if (typeof req.body === 'string') {
+    return JSON.parse(req.body) as AnalyzeRequest;
+  }
+
+  if (Buffer.isBuffer(req.body)) {
+    return JSON.parse(req.body.toString('utf8')) as AnalyzeRequest;
+  }
+
+  if (req.body && typeof req.body === 'object') {
+    return req.body as AnalyzeRequest;
+  }
+
+  let raw = '';
+  for await (const chunk of req) {
+    raw += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+  }
+  return JSON.parse(raw) as AnalyzeRequest;
+}
+
+function sendJson(res: any, status: number, body: unknown): void {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(body));
 }
