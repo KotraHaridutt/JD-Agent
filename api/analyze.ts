@@ -1,3 +1,6 @@
+import crypto from 'crypto';
+import { validateApiKey } from './middleware/auth';
+
 type AnalyzeRequest = {
   system?: string;
   message?: string;
@@ -5,19 +8,52 @@ type AnalyzeRequest = {
 };
 
 export default async function handler(req: any, res: any): Promise<void> {
+  const correlationId = crypto.randomUUID();
+
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendJson(res, 405, {
+      error: 'Method not allowed',
+      code: 'METHOD_NOT_ALLOWED',
+      correlationId
+    });
+    return;
+  }
+
+  const serverApiKey = process.env.API_KEY;
+  if (!serverApiKey) {
+    sendJson(res, 500, {
+      error: 'API_KEY is not configured on the server',
+      code: 'SERVER_MISCONFIGURED',
+      correlationId
+    });
+    return;
+  }
+
+  const apiKeyHeader =
+    (typeof req.headers?.['x-api-key'] === 'string' ? req.headers['x-api-key'] : null) ??
+    (typeof req.headers?.['X-API-Key'] === 'string' ? req.headers['X-API-Key'] : null) ??
+    (typeof req.headers?.get === 'function' ? req.headers.get('x-api-key') || req.headers.get('X-API-Key') : null);
+
+  const authResult = validateApiKey(apiKeyHeader, serverApiKey);
+  if (!authResult.valid) {
+    sendJson(res, 401, {
+      error: authResult.error,
+      code: authResult.code,
+      correlationId
+    });
     return;
   }
 
   try {
     const body = (await readBody(req)) as AnalyzeRequest;
     const result = await analyzeRequest(body);
-    sendJson(res, 200, result);
+    sendJson(res, 200, { ...result, correlationId });
   } catch (error: any) {
     const status = typeof error?.status === 'number' ? error.status : 500;
     sendJson(res, status, {
       error: error?.message ?? 'Unexpected server error',
+      code: error?.code ?? 'SERVER_ERROR',
+      correlationId,
       details: error?.details
     });
   }
@@ -28,6 +64,7 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   if (!apiKey) {
     const error: any = new Error('OPENAI_API_KEY is not configured on the server');
     error.status = 500;
+    error.code = 'OPENAI_KEY_MISSING';
     throw error;
   }
 
@@ -36,6 +73,7 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   if (!body.system || !body.message) {
     const error: any = new Error('Missing system or message');
     error.status = 400;
+    error.code = 'INVALID_INPUT';
     throw error;
   }
 
@@ -77,6 +115,7 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
     const errorText = await response.text();
     const error: any = new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     error.status = response.status;
+    error.code = 'OPENAI_API_ERROR';
     error.details = errorText;
     throw error;
   }
@@ -87,6 +126,7 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   if (!rawText) {
     const error: any = new Error('No text returned in the OpenAI API response');
     error.status = 502;
+    error.code = 'OPENAI_EMPTY_RESPONSE';
     throw error;
   }
 
@@ -97,6 +137,7 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   } catch (error: any) {
     const parseError: any = new Error('Unable to parse JSON response');
     parseError.status = 502;
+    parseError.code = 'OPENAI_PARSE_ERROR';
     parseError.details = error?.message ?? 'Unknown parsing error';
     throw parseError;
   }
