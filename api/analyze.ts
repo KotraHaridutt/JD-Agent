@@ -1,12 +1,7 @@
 import crypto from 'crypto';
 import { validateApiKey } from './middleware/auth';
 import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit';
-
-type AnalyzeRequest = {
-  system?: string;
-  message?: string;
-  useWebSearch?: boolean;
-};
+import { validateAnalyzeRequest, AnalyzeRequest } from './lib/validation';
 
 export default async function handler(req: any, res: any): Promise<void> {
   const correlationId = crypto.randomUUID();
@@ -22,7 +17,7 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const serverApiKey = process.env.API_KEY;
   if (!serverApiKey) {
-    sendJson(res, 500, {
+     sendJson(res, 500, {
       error: 'API_KEY is not configured on the server',
       code: 'SERVER_MISCONFIGURED',
       correlationId
@@ -61,8 +56,20 @@ export default async function handler(req: any, res: any): Promise<void> {
   }
 
   try {
-    const body = (await readBody(req)) as AnalyzeRequest;
-    const result = await analyzeRequest(body);
+    const rawBody = await readBody(req);
+    const validationResult = validateAnalyzeRequest(rawBody);
+
+    if (!validationResult.success) {
+      sendJson(res, 400, {
+        error: 'Invalid request body',
+        code: 'VALIDATION_ERROR',
+        correlationId,
+        details: validationResult.errors
+      });
+      return;
+    }
+
+    const result = await analyzeRequest(validationResult.data);
     sendJson(res, 200, { ...result, correlationId });
   } catch (error: any) {
     const status = typeof error?.status === 'number' ? error.status : 500;
@@ -85,13 +92,6 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   }
 
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
-
-  if (!body.system || !body.message) {
-    const error: any = new Error('Missing system or message');
-    error.status = 400;
-    error.code = 'INVALID_INPUT';
-    throw error;
-  }
 
   const payload: Record<string, unknown> = {
     model,
@@ -187,24 +187,37 @@ function parseJsonResponse(text: string): any {
   }
 }
 
-async function readBody(req: any): Promise<AnalyzeRequest> {
+async function readBody(req: any): Promise<unknown> {
   if (typeof req.body === 'string') {
-    return JSON.parse(req.body) as AnalyzeRequest;
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return req.body;
+    }
   }
 
   if (Buffer.isBuffer(req.body)) {
-    return JSON.parse(req.body.toString('utf8')) as AnalyzeRequest;
+    try {
+      return JSON.parse(req.body.toString('utf8'));
+    } catch {
+      return req.body.toString('utf8');
+    }
   }
 
   if (req.body && typeof req.body === 'object') {
-    return req.body as AnalyzeRequest;
+    return req.body;
   }
 
   let raw = '';
   for await (const chunk of req) {
     raw += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
   }
-  return JSON.parse(raw) as AnalyzeRequest;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }
 
 function setResponseHeader(res: any, name: string, value: string): void {

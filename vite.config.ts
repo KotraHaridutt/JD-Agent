@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { analyzeRequest } from './api/analyze'
 import { validateApiKey } from './api/middleware/auth'
 import { checkRateLimit, extractClientIp } from './api/middleware/rateLimit'
+import { validateAnalyzeRequest } from './api/lib/validation'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -73,8 +74,35 @@ function devAnalyzePlugin(mode: string): Plugin {
         }
 
         try {
-          const body = await readRequestBody(req);
-          const result = await analyzeRequest(JSON.parse(body));
+          const bodyRaw = await readRequestBody(req);
+          let parsedBody: unknown;
+          try {
+            parsedBody = JSON.parse(bodyRaw);
+          } catch {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              error: 'Invalid JSON request body',
+              code: 'INVALID_JSON',
+              correlationId
+            }));
+            return;
+          }
+
+          const validationResult = validateAnalyzeRequest(parsedBody);
+          if (!validationResult.success) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              error: 'Invalid request body',
+              code: 'VALIDATION_ERROR',
+              correlationId,
+              details: validationResult.errors
+            }));
+            return;
+          }
+
+          const result = await analyzeRequest(validationResult.data);
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ...result, correlationId }));
