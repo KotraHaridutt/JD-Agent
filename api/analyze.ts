@@ -1,6 +1,6 @@
 import { validateApiKey } from './middleware/auth';
 import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit';
-import { validateAnalyzeRequest, AnalyzeRequest } from './lib/validation';
+import { validateAnalyzeRequest, AnalyzeRequest } from '../src/schemas';
 import {
   getOrGenerateCorrelationId,
   sanitizeErrorResponse,

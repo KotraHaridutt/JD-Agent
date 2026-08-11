@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { analyzeRequest } from './api/analyze'
 import { validateApiKey } from './api/middleware/auth'
 import { checkRateLimit, extractClientIp } from './api/middleware/rateLimit'
-import { validateAnalyzeRequest } from './api/lib/validation'
+import { validateAnalyzeRequest } from './src/schemas'
 import {
   getOrGenerateCorrelationId,
   sanitizeErrorResponse,
