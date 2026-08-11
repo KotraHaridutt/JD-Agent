@@ -84,7 +84,7 @@ export async function checkRateLimit(
   identifier: string,
   customRatelimit?: any
 ): Promise<RateLimitResult> {
-  if (process.env.SKIP_RATE_LIMIT === 'true') {
+  if (process.env.SKIP_RATE_LIMIT === 'true' && !customRatelimit) {
     return {
       success: true,
       limit: 10,

@@ -64,6 +64,7 @@ export default async function handler(req: any, res: any): Promise<void> {
       sendJson(res, 400, {
         error: 'Invalid request body',
         code: 'VALIDATION_ERROR',
+        details: validationResult.errors,
         correlationId
       });
       return;

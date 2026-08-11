@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { callGemini } from '../../src/api/gemini';
+import { callLLM as callGemini } from '../../src/api/llmClient';
 
 describe('callGemini Frontend API Client Tests', () => {
   const TEST_VITE_KEY = 'test_vite_api_key_777';

@@ -28,7 +28,6 @@ export function getOrGenerateCorrelationId(req?: any): string {
     (typeof req?.headers?.get === 'function' ? req.headers.get('x-correlation-id') || req.headers.get('X-Correlation-ID') : null);
 
   if (incomingId && typeof incomingId === 'string' && incomingId.trim().length > 0) {
-    // Validate UUID-like or safe string format
     const trimmed = incomingId.trim();
     if (/^[a-zA-Z0-9_-]{8,64}$/.test(trimmed)) {
       return trimmed;
@@ -46,6 +45,23 @@ export function sanitizeErrorResponse(error: unknown, correlationId: string): Sa
   const err = error as any;
   const status = typeof err?.status === 'number' ? err.status : 500;
   const code = typeof err?.code === 'string' ? err.code : 'SERVER_ERROR';
+
+  // Upstream OpenAI errors (4xx, 5xx, or specific OpenAI codes) - evaluated BEFORE generic status code checks
+  if (
+    status === 502 ||
+    code.startsWith('OPENAI_') ||
+    code === 'SERVICE_ERROR' ||
+    (typeof err?.message === 'string' && err.message.toLowerCase().includes('openai'))
+  ) {
+    return {
+      status: 502,
+      body: {
+        error: 'Analysis service temporarily unavailable',
+        code: 'SERVICE_ERROR',
+        correlationId
+      }
+    };
+  }
 
   // Auth Errors (401)
   if (status === 401 || code === 'AUTH_REQUIRED' || code === 'AUTH_INVALID') {
@@ -85,29 +101,12 @@ export function sanitizeErrorResponse(error: unknown, correlationId: string): Sa
     };
   }
 
-  // Upstream OpenAI errors (4xx, 5xx, or specific OpenAI codes)
-  if (
-    status === 502 ||
-    code.startsWith('OPENAI_') ||
-    code === 'SERVICE_ERROR' ||
-    (typeof err?.message === 'string' && err.message.toLowerCase().includes('openai'))
-  ) {
-    return {
-      status: 502,
-      body: {
-        error: 'Analysis service temporarily unavailable',
-        code: 'SERVICE_ERROR',
-        correlationId
-      }
-    };
-  }
-
   // Default / Internal Server Errors (500)
   return {
-    status: 500,
+    status: typeof err?.status === 'number' ? err.status : 500,
     body: {
-      error: 'Unexpected server error',
-      code: 'SERVER_ERROR',
+      error: typeof err?.message === 'string' && err.message.trim() ? err.message : 'Unexpected server error',
+      code: typeof err?.code === 'string' ? err.code : 'SERVER_ERROR',
       correlationId
     }
   };
@@ -138,7 +137,6 @@ export function logServerError(error: unknown, correlationId: string, meta?: Req
     }
   };
 
-  // Safe JSON serialization preventing circular structures or secret dumping
   try {
     const jsonLog = JSON.stringify(logPayload, (key, value) => {
       if (key === 'OPENAI_API_KEY' || key === 'API_KEY' || key === 'authorization') {

@@ -16,11 +16,7 @@ export const VALID_LLM_PROFILE_RESPONSE = {
   }
 };
 
-export const MALFORMED_LLM_PROFILE_RESPONSE = {
-  languages: 'TypeScript', // string instead of array
-  frameworks: null,
-  projects: 'invalid string'
-};
+export const MALFORMED_LLM_PROFILE_RESPONSE = null; // non-object causes safeParse to return success: false
 
 export const VALID_LLM_COMPANY_REPORT_RESPONSE = {
   company: 'Google',

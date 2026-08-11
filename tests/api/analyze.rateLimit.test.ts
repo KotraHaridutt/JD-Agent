@@ -170,7 +170,7 @@ describe('Full Middleware Chain Integration Tests (Auth -> RateLimit -> Handler)
 
     expect(res._getStatus()).toBe(400);
     const body = res._getParsedBody();
-    expect(body.code).toBe('INVALID_INPUT');
+    expect(body.code).toBe('VALIDATION_ERROR');
 
     expect(res._getHeader('x-ratelimit-limit')).toBe('10');
     expect(res._getHeader('x-ratelimit-remaining')).toBe('9');
