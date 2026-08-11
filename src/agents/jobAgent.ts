@@ -156,9 +156,9 @@ export async function runJobAgent(
 
     onProgress('Done');
     return {
-      profile: normalizeProfile(profile),
-      jdReports: jdReports.map(normalizeCompanyReport),
-      synthesis: normalizeSynthesisReport(synthesis)
+      profile,
+      jdReports,
+      synthesis
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -183,13 +183,12 @@ async function analyzeCompany(company: string, role: string, timeline: string, p
     );
 
     lastReport = report;
-    const normalized = normalizeCompanyReport(report);
-    if (normalized.jd_url !== 'simulated') {
-      return normalized;
+    if (report.jd_url !== 'simulated') {
+      return report;
     }
   }
 
-  return normalizeCompanyReport(lastReport ?? { company, role });
+  return CompanyReportSchema.parse(lastReport ?? { company, role });
 }
 
 function buildRoleVariants(role: string): string[] {
@@ -292,101 +291,4 @@ function buildSearchHints(company: string, roleVariant: string): string[] {
     `site:smartrecruiters.com "${company}" "${roleVariant}"`,
     `site:ashbyhq.com "${company}" "${roleVariant}"`
   ];
-}
-
-function normalizeProfile(profile: any) {
-  return {
-    languages: asStringArray(profile?.languages),
-    frameworks: asStringArray(profile?.frameworks),
-    databases: asStringArray(profile?.databases),
-    infra: asStringArray(profile?.infra),
-    domains: asStringArray(profile?.domains),
-    projects: Array.isArray(profile?.projects)
-      ? profile.projects.map((project: any) => ({
-          name: typeof project?.name === 'string' ? project.name : '',
-          stack: asStringArray(project?.stack),
-          signals: asStringArray(project?.signals)
-        }))
-      : [],
-    depth_signals: isPlainObject(profile?.depth_signals) ? profile.depth_signals : {}
-  };
-}
-
-function normalizeCompanyReport(report: any) {
-  const company = typeof report?.company === 'string' ? report.company : 'Unknown Company';
-  const jdUrl = typeof report?.jd_url === 'string' ? report.jd_url : 'simulated';
-  const sourceTitle = typeof report?.source_title === 'string' ? report.source_title : company;
-  return {
-    company,
-    role: typeof report?.role === 'string' ? report.role : '',
-    jd_url: jdUrl,
-    source_title: sourceTitle,
-    proof_note: typeof report?.proof_note === 'string' && report.proof_note.trim()
-      ? report.proof_note
-      : jdUrl === 'simulated'
-        ? `No live posting found after checking official/ATS sources for ${company} across multiple backend role variants. The proof is the search trail plus the gap-level evidence below.`
-        : `JD source reviewed for ${company}: ${sourceTitle}`,
-    jd_freshness: typeof report?.jd_freshness === 'string' ? report.jd_freshness : '',
-    fit_label: normalizeFitLabel(report?.fit_label),
-    match_score: typeof report?.match_score === 'number' ? report.match_score : 0,
-    strengths: asStringArray(report?.strengths),
-    gaps: Array.isArray(report?.gaps)
-      ? report.gaps.map((gap: any) => ({
-          jd_says: typeof gap?.jd_says === 'string' ? gap.jd_says : '',
-          jd_means: typeof gap?.jd_means === 'string' ? gap.jd_means : '',
-          candidate_has: typeof gap?.candidate_has === 'string' ? gap.candidate_has : '',
-          gap_type: normalizeGapType(gap?.gap_type),
-          bridge: typeof gap?.bridge === 'string' ? gap.bridge : '',
-          time_estimate: typeof gap?.time_estimate === 'string' ? gap.time_estimate : '',
-          resource: typeof gap?.resource === 'string' ? gap.resource : ''
-        }))
-      : [],
-    top_3_actions: asStringArray(report?.top_3_actions)
-  };
-}
-
-function normalizeSynthesisReport(synthesis: any) {
-  return {
-    priority_gaps: Array.isArray(synthesis?.priority_gaps)
-      ? synthesis.priority_gaps.map((gap: any) => ({
-          skill: typeof gap?.skill === 'string' ? gap.skill : '',
-          companies_needing: asStringArray(gap?.companies_needing),
-          priority_rank: typeof gap?.priority_rank === 'number' ? gap.priority_rank : 0,
-          action: typeof gap?.action === 'string' ? gap.action : '',
-          resource: typeof gap?.resource === 'string' ? gap.resource : '',
-          time_estimate: typeof gap?.time_estimate === 'string' ? gap.time_estimate : ''
-        }))
-      : [],
-    company_ranking: Array.isArray(synthesis?.company_ranking)
-      ? synthesis.company_ranking.map((rank: any) => ({
-          company: typeof rank?.company === 'string' ? rank.company : 'Unknown Company',
-          fit_label: typeof rank?.fit_label === 'string' ? rank.fit_label : 'SKIP',
-          reason: typeof rank?.reason === 'string' ? rank.reason : '',
-          apply_after: typeof rank?.apply_after === 'string' ? rank.apply_after : ''
-        }))
-      : [],
-    today_action: {
-      what: typeof synthesis?.today_action?.what === 'string' ? synthesis.today_action.what : 'Review the strongest cross-company gap',
-      resource: typeof synthesis?.today_action?.resource === 'string' ? synthesis.today_action.resource : '',
-      time: typeof synthesis?.today_action?.time === 'string' ? synthesis.today_action.time : '',
-      why: typeof synthesis?.today_action?.why === 'string' ? synthesis.today_action.why : '',
-      helps_for: asStringArray(synthesis?.today_action?.helps_for)
-    }
-  };
-}
-
-function asStringArray(value: any): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-function isPlainObject(value: any): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function normalizeFitLabel(label: any) {
-  return label === 'APPLY_NOW' || label === 'APPLY_AFTER_PREP' || label === 'SKIP' ? label : 'SKIP';
-}
-
-function normalizeGapType(label: any) {
-  return label === 'STRONG_MATCH' || label === 'PARTIAL_MATCH' || label === 'REAL_GAP' ? label : 'REAL_GAP';
 }
