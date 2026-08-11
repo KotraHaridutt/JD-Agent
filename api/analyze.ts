@@ -6,6 +6,7 @@ import {
   sanitizeErrorResponse,
   logServerError
 } from './lib/errorHandler';
+import { AppError } from './lib/AppError';
 
 export default async function handler(req: any, res: any): Promise<void> {
   const correlationId = getOrGenerateCorrelationId(req);
@@ -22,7 +23,7 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const serverApiKey = process.env.API_KEY;
   if (!serverApiKey) {
-    const errObj = { status: 500, code: 'SERVER_MISCONFIGURED', message: 'API_KEY is not configured on the server' };
+    const errObj = new AppError('API_KEY is not configured on the server', 500, 'SERVER_MISCONFIGURED');
     logServerError(errObj, correlationId, { method: req.method, url: req.url });
     const sanitized = sanitizeErrorResponse(errObj, correlationId);
     sendJson(res, sanitized.status, sanitized.body);
@@ -36,10 +37,8 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const authResult = validateApiKey(apiKeyHeader, serverApiKey);
   if (!authResult.valid) {
-    const sanitized = sanitizeErrorResponse(
-      { status: 401, code: authResult.code, message: authResult.error },
-      correlationId
-    );
+    const errObj = new AppError(authResult.error, 401, authResult.code);
+    const sanitized = sanitizeErrorResponse(errObj, correlationId);
     sendJson(res, sanitized.status, sanitized.body);
     return;
   }
@@ -51,10 +50,8 @@ export default async function handler(req: any, res: any): Promise<void> {
   if (!rateLimitResult.success) {
     const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
     setResponseHeader(res, 'Retry-After', String(retryAfterSeconds));
-    const sanitized = sanitizeErrorResponse(
-      { status: 429, code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
-      correlationId
-    );
+    const errObj = new AppError('Rate limit exceeded', 429, 'RATE_LIMIT_EXCEEDED');
+    const sanitized = sanitizeErrorResponse(errObj, correlationId);
     sendJson(res, sanitized.status, sanitized.body);
     return;
   }
@@ -74,7 +71,7 @@ export default async function handler(req: any, res: any): Promise<void> {
 
     const result = await analyzeRequest(validationResult.data);
     sendJson(res, 200, { ...result, correlationId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logServerError(error, correlationId, { method: req.method, url: req.url, clientIp });
     const sanitized = sanitizeErrorResponse(error, correlationId);
     sendJson(res, sanitized.status, sanitized.body);
@@ -84,10 +81,7 @@ export default async function handler(req: any, res: any): Promise<void> {
 export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    const error: any = new Error('OPENAI_API_KEY is not configured on the server');
-    error.status = 500;
-    error.code = 'OPENAI_KEY_MISSING';
-    throw error;
+    throw new AppError('OPENAI_API_KEY is not configured on the server', 500, 'OPENAI_KEY_MISSING');
   }
 
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
@@ -128,33 +122,28 @@ export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    const error: any = new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
-    error.status = response.status;
-    error.code = 'OPENAI_API_ERROR';
-    error.details = errorText;
-    throw error;
+    throw new AppError(
+      `OpenAI API error: ${response.status} ${response.statusText}`,
+      response.status,
+      'OPENAI_API_ERROR',
+      errorText
+    );
   }
 
   const data = await response.json();
   const rawText = extractResponseText(data);
 
   if (!rawText) {
-    const error: any = new Error('No text returned in the OpenAI API response');
-    error.status = 502;
-    error.code = 'OPENAI_EMPTY_RESPONSE';
-    throw error;
+    throw new AppError('No text returned in the OpenAI API response', 502, 'OPENAI_EMPTY_RESPONSE');
   }
 
   const cleanText = rawText.replace(/```json|```/g, '').trim();
 
   try {
     return parseJsonResponse(cleanText);
-  } catch (error: any) {
-    const parseError: any = new Error('Unable to parse JSON response');
-    parseError.status = 502;
-    parseError.code = 'OPENAI_PARSE_ERROR';
-    parseError.details = error?.message ?? 'Unknown parsing error';
-    throw parseError;
+  } catch (error: unknown) {
+    const detailsMessage = error instanceof Error ? error.message : 'Unknown parsing error';
+    throw new AppError('Unable to parse JSON response', 502, 'OPENAI_PARSE_ERROR', detailsMessage);
   }
 }
 

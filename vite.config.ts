@@ -9,6 +9,7 @@ import {
   sanitizeErrorResponse,
   logServerError
 } from './api/lib/errorHandler'
+import { AppError } from './api/lib/AppError'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -32,7 +33,7 @@ function devAnalyzePlugin(mode: string): Plugin {
         const serverApiKey = process.env.API_KEY;
 
         if (!serverApiKey) {
-          const errObj = { status: 500, code: 'SERVER_MISCONFIGURED', message: 'API_KEY is not configured on the server' };
+          const errObj = new AppError('API_KEY is not configured on the server', 500, 'SERVER_MISCONFIGURED');
           logServerError(errObj, correlationId, { method: req.method, url: req.url });
           const sanitized = sanitizeErrorResponse(errObj, correlationId);
           res.statusCode = sanitized.status;
@@ -47,10 +48,8 @@ function devAnalyzePlugin(mode: string): Plugin {
 
         const authResult = validateApiKey(apiKeyHeader, serverApiKey);
         if (!authResult.valid) {
-          const sanitized = sanitizeErrorResponse(
-            { status: 401, code: authResult.code, message: authResult.error },
-            correlationId
-          );
+          const errObj = new AppError(authResult.error, 401, authResult.code);
+          const sanitized = sanitizeErrorResponse(errObj, correlationId);
           res.statusCode = sanitized.status;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(sanitized.body));
@@ -68,10 +67,8 @@ function devAnalyzePlugin(mode: string): Plugin {
         if (!rateLimitResult.success) {
           const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
           res.setHeader('Retry-After', String(retryAfterSeconds));
-          const sanitized = sanitizeErrorResponse(
-            { status: 429, code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
-            correlationId
-          );
+          const errObj = new AppError('Rate limit exceeded', 429, 'RATE_LIMIT_EXCEEDED');
+          const sanitized = sanitizeErrorResponse(errObj, correlationId);
           res.statusCode = sanitized.status;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(sanitized.body));
@@ -84,10 +81,8 @@ function devAnalyzePlugin(mode: string): Plugin {
           try {
             parsedBody = JSON.parse(bodyRaw);
           } catch {
-            const sanitized = sanitizeErrorResponse(
-              { status: 400, code: 'INVALID_JSON', message: 'Invalid JSON request body' },
-              correlationId
-            );
+            const errObj = new AppError('Invalid JSON request body', 400, 'INVALID_JSON');
+            const sanitized = sanitizeErrorResponse(errObj, correlationId);
             res.statusCode = sanitized.status;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(sanitized.body));
@@ -96,10 +91,8 @@ function devAnalyzePlugin(mode: string): Plugin {
 
           const validationResult = validateAnalyzeRequest(parsedBody);
           if (!validationResult.success) {
-            const sanitized = sanitizeErrorResponse(
-              { status: 400, code: 'VALIDATION_ERROR', message: 'Invalid request body' },
-              correlationId
-            );
+            const errObj = new AppError('Invalid request body', 400, 'VALIDATION_ERROR');
+            const sanitized = sanitizeErrorResponse(errObj, correlationId);
             res.statusCode = sanitized.status;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(sanitized.body));
@@ -110,7 +103,7 @@ function devAnalyzePlugin(mode: string): Plugin {
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ...result, correlationId }));
-        } catch (error) {
+        } catch (error: unknown) {
           logServerError(error, correlationId, { method: req.method, url: req.url, clientIp });
           const sanitized = sanitizeErrorResponse(error, correlationId);
           res.statusCode = sanitized.status;

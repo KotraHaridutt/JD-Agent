@@ -19,8 +19,9 @@ function App() {
     try {
       const result = await runJobAgent(resume, companies, role, timeline, setProgressStep);
       setReport(result);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(message);
     } finally {
       setIsAnalyzing(false);
       setProgressStep('');

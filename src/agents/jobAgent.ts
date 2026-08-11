@@ -149,9 +149,10 @@ export async function runJobAgent(
       jdReports: jdReports.map(normalizeCompanyReport),
       synthesis: normalizeSynthesisReport(synthesis)
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('Job Agent Error:', err);
-    throw new Error('Analysis failed: ' + err.message);
+    throw new Error('Analysis failed: ' + message);
   }
 }
 
