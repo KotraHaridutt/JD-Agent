@@ -1,10 +1,14 @@
-import crypto from 'crypto'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { analyzeRequest } from './api/analyze'
 import { validateApiKey } from './api/middleware/auth'
 import { checkRateLimit, extractClientIp } from './api/middleware/rateLimit'
 import { validateAnalyzeRequest } from './api/lib/validation'
+import {
+  getOrGenerateCorrelationId,
+  sanitizeErrorResponse,
+  logServerError
+} from './api/lib/errorHandler'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -22,17 +26,18 @@ function devAnalyzePlugin(mode: string): Plugin {
           return;
         }
 
-        const correlationId = crypto.randomUUID();
+        const correlationId = getOrGenerateCorrelationId(req);
+        res.setHeader('X-Correlation-ID', correlationId);
+
         const serverApiKey = process.env.API_KEY;
 
         if (!serverApiKey) {
-          res.statusCode = 500;
+          const errObj = { status: 500, code: 'SERVER_MISCONFIGURED', message: 'API_KEY is not configured on the server' };
+          logServerError(errObj, correlationId, { method: req.method, url: req.url });
+          const sanitized = sanitizeErrorResponse(errObj, correlationId);
+          res.statusCode = sanitized.status;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            error: 'API_KEY is not configured on the server',
-            code: 'SERVER_MISCONFIGURED',
-            correlationId
-          }));
+          res.end(JSON.stringify(sanitized.body));
           return;
         }
 
@@ -42,13 +47,13 @@ function devAnalyzePlugin(mode: string): Plugin {
 
         const authResult = validateApiKey(apiKeyHeader, serverApiKey);
         if (!authResult.valid) {
-          res.statusCode = 401;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            error: authResult.error,
-            code: authResult.code,
+          const sanitized = sanitizeErrorResponse(
+            { status: 401, code: authResult.code, message: authResult.error },
             correlationId
-          }));
+          );
+          res.statusCode = sanitized.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(sanitized.body));
           return;
         }
 
@@ -63,13 +68,13 @@ function devAnalyzePlugin(mode: string): Plugin {
         if (!rateLimitResult.success) {
           const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
           res.setHeader('Retry-After', String(retryAfterSeconds));
-          res.statusCode = 429;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            error: 'Rate limit exceeded. Please try again later.',
-            code: 'RATE_LIMIT_EXCEEDED',
+          const sanitized = sanitizeErrorResponse(
+            { status: 429, code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
             correlationId
-          }));
+          );
+          res.statusCode = sanitized.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(sanitized.body));
           return;
         }
 
@@ -79,26 +84,25 @@ function devAnalyzePlugin(mode: string): Plugin {
           try {
             parsedBody = JSON.parse(bodyRaw);
           } catch {
-            res.statusCode = 400;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({
-              error: 'Invalid JSON request body',
-              code: 'INVALID_JSON',
+            const sanitized = sanitizeErrorResponse(
+              { status: 400, code: 'INVALID_JSON', message: 'Invalid JSON request body' },
               correlationId
-            }));
+            );
+            res.statusCode = sanitized.status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(sanitized.body));
             return;
           }
 
           const validationResult = validateAnalyzeRequest(parsedBody);
           if (!validationResult.success) {
-            res.statusCode = 400;
+            const sanitized = sanitizeErrorResponse(
+              { status: 400, code: 'VALIDATION_ERROR', message: 'Invalid request body' },
+              correlationId
+            );
+            res.statusCode = sanitized.status;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({
-              error: 'Invalid request body',
-              code: 'VALIDATION_ERROR',
-              correlationId,
-              details: validationResult.errors
-            }));
+            res.end(JSON.stringify(sanitized.body));
             return;
           }
 
@@ -107,12 +111,11 @@ function devAnalyzePlugin(mode: string): Plugin {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ...result, correlationId }));
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500;
-          const code = (error as any)?.code ?? 'SERVER_ERROR';
-          res.statusCode = status;
+          logServerError(error, correlationId, { method: req.method, url: req.url, clientIp });
+          const sanitized = sanitizeErrorResponse(error, correlationId);
+          res.statusCode = sanitized.status;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: message, code, correlationId, details: (error as any)?.details }));
+          res.end(JSON.stringify(sanitized.body));
         }
       });
     }

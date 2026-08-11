@@ -1,10 +1,15 @@
-import crypto from 'crypto';
 import { validateApiKey } from './middleware/auth';
 import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit';
 import { validateAnalyzeRequest, AnalyzeRequest } from './lib/validation';
+import {
+  getOrGenerateCorrelationId,
+  sanitizeErrorResponse,
+  logServerError
+} from './lib/errorHandler';
 
 export default async function handler(req: any, res: any): Promise<void> {
-  const correlationId = crypto.randomUUID();
+  const correlationId = getOrGenerateCorrelationId(req);
+  setResponseHeader(res, 'X-Correlation-ID', correlationId);
 
   if (req.method !== 'POST') {
     sendJson(res, 405, {
@@ -17,11 +22,10 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const serverApiKey = process.env.API_KEY;
   if (!serverApiKey) {
-     sendJson(res, 500, {
-      error: 'API_KEY is not configured on the server',
-      code: 'SERVER_MISCONFIGURED',
-      correlationId
-    });
+    const errObj = { status: 500, code: 'SERVER_MISCONFIGURED', message: 'API_KEY is not configured on the server' };
+    logServerError(errObj, correlationId, { method: req.method, url: req.url });
+    const sanitized = sanitizeErrorResponse(errObj, correlationId);
+    sendJson(res, sanitized.status, sanitized.body);
     return;
   }
 
@@ -32,11 +36,11 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const authResult = validateApiKey(apiKeyHeader, serverApiKey);
   if (!authResult.valid) {
-    sendJson(res, 401, {
-      error: authResult.error,
-      code: authResult.code,
+    const sanitized = sanitizeErrorResponse(
+      { status: 401, code: authResult.code, message: authResult.error },
       correlationId
-    });
+    );
+    sendJson(res, sanitized.status, sanitized.body);
     return;
   }
 
@@ -47,11 +51,11 @@ export default async function handler(req: any, res: any): Promise<void> {
   if (!rateLimitResult.success) {
     const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
     setResponseHeader(res, 'Retry-After', String(retryAfterSeconds));
-    sendJson(res, 429, {
-      error: 'Rate limit exceeded. Please try again later.',
-      code: 'RATE_LIMIT_EXCEEDED',
+    const sanitized = sanitizeErrorResponse(
+      { status: 429, code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
       correlationId
-    });
+    );
+    sendJson(res, sanitized.status, sanitized.body);
     return;
   }
 
@@ -63,8 +67,7 @@ export default async function handler(req: any, res: any): Promise<void> {
       sendJson(res, 400, {
         error: 'Invalid request body',
         code: 'VALIDATION_ERROR',
-        correlationId,
-        details: validationResult.errors
+        correlationId
       });
       return;
     }
@@ -72,13 +75,9 @@ export default async function handler(req: any, res: any): Promise<void> {
     const result = await analyzeRequest(validationResult.data);
     sendJson(res, 200, { ...result, correlationId });
   } catch (error: any) {
-    const status = typeof error?.status === 'number' ? error.status : 500;
-    sendJson(res, status, {
-      error: error?.message ?? 'Unexpected server error',
-      code: error?.code ?? 'SERVER_ERROR',
-      correlationId,
-      details: error?.details
-    });
+    logServerError(error, correlationId, { method: req.method, url: req.url, clientIp });
+    const sanitized = sanitizeErrorResponse(error, correlationId);
+    sendJson(res, sanitized.status, sanitized.body);
   }
 }
 
