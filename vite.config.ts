@@ -3,6 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { analyzeRequest } from './api/analyze'
 import { validateApiKey } from './api/middleware/auth'
+import { checkRateLimit, extractClientIp } from './api/middleware/rateLimit'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -12,6 +13,7 @@ function devAnalyzePlugin(mode: string): Plugin {
       process.env.API_KEY = env.API_KEY ?? process.env.API_KEY;
       process.env.OPENAI_API_KEY = env.OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
       process.env.OPENAI_MODEL = env.OPENAI_MODEL ?? process.env.OPENAI_MODEL;
+      process.env.SKIP_RATE_LIMIT = env.SKIP_RATE_LIMIT ?? process.env.SKIP_RATE_LIMIT;
 
       server.middlewares.use(async (req, res, next) => {
         if (req.url !== '/api/analyze' || req.method !== 'POST') {
@@ -44,6 +46,27 @@ function devAnalyzePlugin(mode: string): Plugin {
           res.end(JSON.stringify({
             error: authResult.error,
             code: authResult.code,
+            correlationId
+          }));
+          return;
+        }
+
+        const clientIp = extractClientIp(req);
+        const rateLimitResult = await checkRateLimit(clientIp);
+
+        const resetEpochSeconds = Math.ceil(rateLimitResult.reset / 1000);
+        res.setHeader('X-RateLimit-Limit', String(rateLimitResult.limit));
+        res.setHeader('X-RateLimit-Remaining', String(rateLimitResult.remaining));
+        res.setHeader('X-RateLimit-Reset', String(resetEpochSeconds));
+
+        if (!rateLimitResult.success) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+          res.setHeader('Retry-After', String(retryAfterSeconds));
+          res.statusCode = 429;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            error: 'Rate limit exceeded. Please try again later.',
+            code: 'RATE_LIMIT_EXCEEDED',
             correlationId
           }));
           return;

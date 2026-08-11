@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { validateApiKey } from './middleware/auth';
+import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit';
 
 type AnalyzeRequest = {
   system?: string;
@@ -39,6 +40,21 @@ export default async function handler(req: any, res: any): Promise<void> {
     sendJson(res, 401, {
       error: authResult.error,
       code: authResult.code,
+      correlationId
+    });
+    return;
+  }
+
+  const clientIp = extractClientIp(req);
+  const rateLimitResult = await checkRateLimit(clientIp);
+  setRateLimitHeaders(res, rateLimitResult);
+
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateLimitResult.reset - Date.now()) / 1000));
+    setResponseHeader(res, 'Retry-After', String(retryAfterSeconds));
+    sendJson(res, 429, {
+      error: 'Rate limit exceeded. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
       correlationId
     });
     return;
@@ -191,8 +207,23 @@ async function readBody(req: any): Promise<AnalyzeRequest> {
   return JSON.parse(raw) as AnalyzeRequest;
 }
 
+function setResponseHeader(res: any, name: string, value: string): void {
+  if (typeof res.setHeader === 'function') {
+    res.setHeader(name, value);
+  } else if (res.headers && typeof res.headers.set === 'function') {
+    res.headers.set(name, value);
+  }
+}
+
+function setRateLimitHeaders(res: any, result: RateLimitResult): void {
+  const resetEpochSeconds = Math.ceil(result.reset / 1000);
+  setResponseHeader(res, 'X-RateLimit-Limit', String(result.limit));
+  setResponseHeader(res, 'X-RateLimit-Remaining', String(result.remaining));
+  setResponseHeader(res, 'X-RateLimit-Reset', String(resetEpochSeconds));
+}
+
 function sendJson(res: any, status: number, body: unknown): void {
   res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
+  setResponseHeader(res, 'Content-Type', 'application/json');
   res.end(JSON.stringify(body));
 }
