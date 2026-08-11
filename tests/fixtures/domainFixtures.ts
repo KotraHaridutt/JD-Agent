@@ -58,3 +58,48 @@ export const MALFORMED_COMPANY_REPORT = {
   match_score: '8.5', // coerced to 8.5
   gaps: 'not an array' // wrong type
 };
+
+export const VALID_SYNTHESIS_REPORT = {
+  priority_gaps: [
+    {
+      skill: 'System Design',
+      companies_needing: ['NVIDIA', 'Google'],
+      priority_rank: 1,
+      action: 'Read DDIA Chapter 5',
+      resource: 'Designing Data-Intensive Applications',
+      time_estimate: '2-3 hours'
+    }
+  ],
+  company_ranking: [
+    {
+      company: 'NVIDIA',
+      fit_label: 'APPLY_AFTER_PREP',
+      reason: 'Strong core skills, needs system design prep',
+      apply_after: '2 weeks'
+    }
+  ],
+  today_action: {
+    what: 'Read DDIA Chapter 5 (Replication)',
+    resource: 'Designing Data-Intensive Applications Book',
+    time: '2 hours',
+    why: 'Addresses system design requirements for both NVIDIA and Swiggy',
+    helps_for: ['NVIDIA', 'Swiggy']
+  }
+};
+
+export const MALFORMED_SYNTHESIS_REPORT = {
+  priority_gaps: 'invalid array',
+  company_ranking: [
+    {
+      company: 12345,
+      fit_label: 'MAYBE' // Invalid enum, should default to SKIP
+    }
+  ],
+  today_action: 'Not an object' // Invalid object, should fall back to default TodayAction
+};
+
+export const VALID_JOB_AGENT_RESULT = {
+  profile: VALID_RESUME_PROFILE,
+  jdReports: [VALID_COMPANY_REPORT],
+  synthesis: VALID_SYNTHESIS_REPORT
+};
