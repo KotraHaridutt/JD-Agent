@@ -1,73 +1,30 @@
-export interface ResumeProfile {
-  languages: string[];
-  frameworks: string[];
-  databases: string[];
-  infra: string[];
-  domains: string[];
-  projects: Array<{
-    name: string;
-    stack: string[];
-    signals: string[];
-  }>;
-  depth_signals: Record<string, string>;
-}
+import type { z } from 'zod';
+import type {
+  ResumeProfileSchema,
+  ProjectSchema,
+  GapInfoSchema,
+  GapTypeEnum,
+  CompanyReportSchema,
+  FitLabelEnum,
+  PriorityGapSchema,
+  CompanyRankingInfoSchema,
+  TodayActionSchema,
+  SynthesisReportSchema,
+  JobAgentResultSchema
+} from '../schemas';
 
-export interface GapInfo {
-  jd_says: string;
-  jd_means: string;
-  candidate_has: string;
-  gap_type: 'STRONG_MATCH' | 'PARTIAL_MATCH' | 'REAL_GAP';
-  bridge: string;
-  time_estimate: string;
-  resource: string;
-}
+export type ResumeProfile = z.infer<typeof ResumeProfileSchema>;
+export type Project = z.infer<typeof ProjectSchema>;
 
-export interface CompanyReport {
-  company: string;
-  role: string;
-  jd_url: string;
-  proof_note: string;
-  source_title: string;
-  jd_freshness: string;
-  fit_label: 'APPLY_NOW' | 'APPLY_AFTER_PREP' | 'SKIP';
-  match_score: number;
-  strengths: string[];
-  gaps: GapInfo[];
-  top_3_actions: string[];
-}
+export type GapInfo = z.infer<typeof GapInfoSchema>;
+export type GapType = z.infer<typeof GapTypeEnum>;
 
-export interface PriorityGap {
-  skill: string;
-  companies_needing: string[];
-  priority_rank: number;
-  action: string;
-  resource: string;
-  time_estimate: string;
-}
+export type CompanyReport = z.infer<typeof CompanyReportSchema>;
+export type FitLabel = z.infer<typeof FitLabelEnum>;
 
-export interface CompanyRankingInfo {
-  company: string;
-  fit_label: string;
-  reason: string;
-  apply_after: string;
-}
+export type PriorityGap = z.infer<typeof PriorityGapSchema>;
+export type CompanyRankingInfo = z.infer<typeof CompanyRankingInfoSchema>;
+export type TodayAction = z.infer<typeof TodayActionSchema>;
+export type SynthesisReport = z.infer<typeof SynthesisReportSchema>;
 
-export interface TodayAction {
-  what: string;
-  resource: string;
-  time: string;
-  why: string;
-  helps_for: string[];
-}
-
-export interface SynthesisReport {
-  priority_gaps: PriorityGap[];
-  company_ranking: CompanyRankingInfo[];
-  today_action: TodayAction;
-}
-
-export interface JobAgentResult {
-  profile: ResumeProfile;
-  jdReports: CompanyReport[];
-  synthesis: SynthesisReport;
-}
+export type JobAgentResult = z.infer<typeof JobAgentResultSchema>;
