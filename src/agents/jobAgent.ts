@@ -1,4 +1,9 @@
-import { callGemini } from '../api/gemini';
+import { callLLMWithValidation } from '../api/llmClient';
+import {
+  ResumeProfileSchema,
+  CompanyReportSchema,
+  SynthesisReportSchema
+} from '../schemas';
 import type { JobAgentResult } from '../types';
 
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are a resume parser. Extract a structured skill profile 
@@ -123,11 +128,14 @@ export async function runJobAgent(
   try {
     // STEP 1: Orchestrator
     onProgress('Step 1/3: Parsing resume into structured profile...');
-    const profile = await callGemini({
-      system: ORCHESTRATOR_SYSTEM_PROMPT,
-      message: resume,
-      useWebSearch: false
-    });
+    const profile = await callLLMWithValidation(
+      {
+        system: ORCHESTRATOR_SYSTEM_PROMPT,
+        message: resume,
+        useWebSearch: false
+      },
+      ResumeProfileSchema
+    );
 
     // STEP 2: JD Agents
     onProgress(`Step 2/3: Fetching JDs and analyzing gaps for ${companies.join(', ')}...`);
@@ -137,11 +145,14 @@ export async function runJobAgent(
 
     // STEP 3: Synthesis Agent
     onProgress('Step 3/3: Synthesizing cross-company report and next actions...');
-    const synthesis = await callGemini({
-      system: SYNTHESIS_SYSTEM_PROMPT,
-      message: `Timeline: ${timeline}\nAll company reports: ${JSON.stringify(jdReports)}`,
-      useWebSearch: false
-    });
+    const synthesis = await callLLMWithValidation(
+      {
+        system: SYNTHESIS_SYSTEM_PROMPT,
+        message: `Timeline: ${timeline}\nAll company reports: ${JSON.stringify(jdReports)}`,
+        useWebSearch: false
+      },
+      SynthesisReportSchema
+    );
 
     onProgress('Done');
     return {
@@ -162,11 +173,14 @@ async function analyzeCompany(company: string, role: string, timeline: string, p
 
   for (const roleVariant of roleVariants) {
     const searchHints = buildSearchHints(company, roleVariant);
-    const report = await callGemini({
-      system: JD_AGENT_SYSTEM_PROMPT,
-      message: `Search pass for company: ${company}\nTarget role: ${roleVariant}\nOriginal user role: ${role}\nCompany-specific search hints: ${searchHints.join(' | ')}\nSearch priority: official careers page, then ATS page, then archived company posting only if current posting is not found\nUse equivalent current titles if needed, but prefer the most exact live opening you can verify.\nReturn the most specific live JD URL you can verify.\nTimeline: ${timeline}\nResume Profile: ${JSON.stringify(profile)}`,
-      useWebSearch: true
-    });
+    const report = await callLLMWithValidation(
+      {
+        system: JD_AGENT_SYSTEM_PROMPT,
+        message: `Search pass for company: ${company}\nTarget role: ${roleVariant}\nOriginal user role: ${role}\nCompany-specific search hints: ${searchHints.join(' | ')}\nSearch priority: official careers page, then ATS page, then archived company posting only if current posting is not found\nUse equivalent current titles if needed, but prefer the most exact live opening you can verify.\nReturn the most specific live JD URL you can verify.\nTimeline: ${timeline}\nResume Profile: ${JSON.stringify(profile)}`,
+        useWebSearch: true
+      },
+      CompanyReportSchema
+    );
 
     lastReport = report;
     const normalized = normalizeCompanyReport(report);
