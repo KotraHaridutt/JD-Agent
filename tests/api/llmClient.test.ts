@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { callLLMWithValidation, ValidationExhaustedError } from '../../src/api/llmClient';
-import * as geminiModule from '../../src/api/gemini';
+import { callLLM, callLLMWithValidation, ValidationExhaustedError } from '../../src/api/llmClient';
 import { ResumeProfileSchema, CompanyReportSchema } from '../../src/schemas';
 import {
   VALID_LLM_PROFILE_RESPONSE,
@@ -8,93 +7,138 @@ import {
   VALID_LLM_COMPANY_REPORT_RESPONSE
 } from '../fixtures/llmResponseFixtures';
 
-describe('callLLMWithValidation Unit & Integration Tests (src/api/llmClient.ts)', () => {
+describe('llmClient Unit & Integration Tests (src/api/llmClient.ts)', () => {
+  const originalEnv = import.meta.env;
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    import.meta.env.VITE_API_KEY = 'test_vite_api_key';
   });
 
   afterEach(() => {
+    import.meta.env.VITE_API_KEY = originalEnv.VITE_API_KEY;
     vi.restoreAllMocks();
   });
 
-  it('should return validated typed data immediately on successful 1st attempt', async () => {
-    const callGeminiSpy = vi
-      .spyOn(geminiModule, 'callGemini')
-      .mockResolvedValue(VALID_LLM_PROFILE_RESPONSE);
+  describe('callLLM low-level fetch client', () => {
+    it('should send POST request with X-API-Key header and return parsed JSON', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => VALID_LLM_COMPANY_REPORT_RESPONSE
+      });
+      vi.stubGlobal('fetch', mockFetch);
 
-    const result = await callLLMWithValidation(
-      {
+      const result = await callLLM({
         system: 'System prompt',
-        message: 'User message',
-        useWebSearch: false
-      },
-      ResumeProfileSchema
-    );
-
-    expect(callGeminiSpy).toHaveBeenCalledTimes(1);
-    expect(result.languages).toEqual(['TypeScript', 'Python']);
-    expect(result.projects.length).toBe(1);
-  });
-
-  it('should retry when 1st attempt fails validation and succeed on 2nd attempt with feedback', async () => {
-    const callGeminiSpy = vi
-      .spyOn(geminiModule, 'callGemini')
-      .mockResolvedValueOnce(MALFORMED_LLM_PROFILE_RESPONSE)
-      .mockResolvedValueOnce(VALID_LLM_PROFILE_RESPONSE);
-
-    const result = await callLLMWithValidation(
-      {
-        system: 'System prompt',
-        message: 'User message',
+        message: 'Job description message',
         useWebSearch: true
-      },
-      ResumeProfileSchema,
-      2
-    );
+      });
 
-    expect(callGeminiSpy).toHaveBeenCalledTimes(2);
-    expect(result.languages).toEqual(['TypeScript', 'Python']);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe('/api/analyze');
+      expect(options.headers['X-API-Key']).toBe('test_vite_api_key');
+      expect(JSON.parse(options.body)).toEqual({
+        system: 'System prompt',
+        message: 'Job description message',
+        useWebSearch: true
+      });
+      expect(result.company).toBe('Google');
+    });
 
-    // Check 1st call arguments: useWebSearch should be true
-    expect(callGeminiSpy.mock.calls[0][0].useWebSearch).toBe(true);
+    it('should throw error when 401 Unauthorized is returned', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          text: async () => 'Invalid API key'
+        })
+      );
 
-    // Check 2nd call arguments: useWebSearch should be false, and message should contain error details
-    const secondCallParams = callGeminiSpy.mock.calls[1][0];
-    expect(secondCallParams.useWebSearch).toBe(false);
-    expect(secondCallParams.message).toContain('Your previous response had validation errors');
+      await expect(
+        callLLM({ system: 'sys', message: 'msg' })
+      ).rejects.toThrow('Authentication failed (401)');
+    });
   });
 
-  it('should throw ValidationExhaustedError when all 3 attempts fail schema validation', async () => {
-    vi.spyOn(geminiModule, 'callGemini').mockResolvedValue(MALFORMED_LLM_PROFILE_RESPONSE);
+  describe('callLLMWithValidation wrapper client', () => {
+    it('should return validated typed data immediately on successful 1st attempt', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => VALID_LLM_PROFILE_RESPONSE
+        })
+      );
 
-    await expect(
-      callLLMWithValidation(
+      const result = await callLLMWithValidation(
         {
           system: 'System prompt',
-          message: 'User message'
+          message: 'User message',
+          useWebSearch: false
+        },
+        ResumeProfileSchema
+      );
+
+      expect(result.languages).toEqual(['TypeScript', 'Python']);
+      expect(result.projects.length).toBe(1);
+    });
+
+    it('should retry when 1st attempt fails validation and succeed on 2nd attempt with feedback', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => MALFORMED_LLM_PROFILE_RESPONSE
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => VALID_LLM_PROFILE_RESPONSE
+        });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await callLLMWithValidation(
+        {
+          system: 'System prompt',
+          message: 'User message',
+          useWebSearch: true
         },
         ResumeProfileSchema,
         2
-      )
-    ).rejects.toThrow(ValidationExhaustedError);
-  });
+      );
 
-  it('should propagate API/Network errors immediately without retrying schema validation', async () => {
-    const callGeminiSpy = vi
-      .spyOn(geminiModule, 'callGemini')
-      .mockRejectedValue(new Error('Rate limit exceeded (429)'));
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(result.languages).toEqual(['TypeScript', 'Python']);
 
-    await expect(
-      callLLMWithValidation(
-        {
-          system: 'System prompt',
-          message: 'User message'
-        },
-        CompanyReportSchema,
-        2
-      )
-    ).rejects.toThrow('Rate limit exceeded (429)');
+      const firstCallBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(firstCallBody.useWebSearch).toBe(true);
 
-    expect(callGeminiSpy).toHaveBeenCalledTimes(1);
+      const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(secondCallBody.useWebSearch).toBe(false);
+      expect(secondCallBody.message).toContain('Your previous response had validation errors');
+    });
+
+    it('should throw ValidationExhaustedError when all 3 attempts fail schema validation', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => MALFORMED_LLM_PROFILE_RESPONSE
+        })
+      );
+
+      await expect(
+        callLLMWithValidation(
+          {
+            system: 'System prompt',
+            message: 'User message'
+          },
+          ResumeProfileSchema,
+          2
+        )
+      ).rejects.toThrow(ValidationExhaustedError);
+    });
   });
 });

@@ -1,0 +1,17 @@
+{
+  "languages": ["TypeScript", "Python", "Go"],
+  "frameworks": ["React", "Express", "Node.js"],
+  "databases": ["PostgreSQL", "Redis"],
+  "infra": ["AWS", "Docker", "Vercel"],
+  "domains": ["Fintech", "Backend Systems"],
+  "projects": [
+    {
+      "name": "JD-Agent",
+      "stack": ["TypeScript", "React"],
+      "signals": ["Production deployment", "Sliding window rate limiter"]
+    }
+  ],
+  "depth_signals": {
+    "TypeScript": "5 years production experience"
+  }
+}

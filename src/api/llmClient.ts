@@ -1,11 +1,12 @@
 import { ZodType } from 'zod';
-import { callGemini } from './gemini';
 
-export interface LLMCallParams {
+export interface CallLLMParams {
   system: string;
   message: string;
   useWebSearch?: boolean;
 }
+
+export type LLMCallParams = CallLLMParams;
 
 export class ValidationExhaustedError extends Error {
   public attempts: number;
@@ -22,11 +23,60 @@ export class ValidationExhaustedError extends Error {
 }
 
 /**
- * Executes an LLM API call via callGemini with Zod schema validation and a self-correcting retry loop.
+ * Low-level HTTP client function that sends requests to the serverless analysis endpoint /api/analyze.
+ */
+export async function callLLM({ system, message, useWebSearch = false }: CallLLMParams): Promise<any> {
+  const apiKey = import.meta.env.VITE_API_KEY;
+
+  if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+    const configError = new Error(
+      'VITE_API_KEY environment variable is not configured. Please set VITE_API_KEY in your .env file.'
+    );
+    console.error(configError.message);
+    throw configError;
+  }
+
+  try {
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey.trim()
+      },
+      body: JSON.stringify({ system, message, useWebSearch })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+
+      if (response.status === 401) {
+        throw new Error(
+          `Authentication failed (401). Please check your VITE_API_KEY configuration - ${errorData}`
+        );
+      }
+
+      if (response.status === 429) {
+        throw new Error(
+          `Rate limit exceeded (429). Please wait a moment before trying again - ${errorData}`
+        );
+      }
+
+      throw new Error(`Analysis API error: ${response.status} ${response.statusText} - ${errorData}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error calling analysis API:', error);
+    throw error;
+  }
+}
+
+/**
+ * Executes an LLM API call via callLLM with Zod schema validation and a self-correcting retry loop.
  * On validation failure, appends Zod error details to the prompt as feedback context (up to maxRetries).
  */
 export async function callLLMWithValidation<T>(
-  params: LLMCallParams,
+  params: CallLLMParams,
   schema: ZodType<T>,
   maxRetries: number = 2
 ): Promise<T> {
@@ -39,7 +89,7 @@ export async function callLLMWithValidation<T>(
     const useWebSearch = isFirstAttempt ? (params.useWebSearch ?? false) : false;
 
     try {
-      const response = await callGemini({
+      const response = await callLLM({
         system: params.system,
         message: currentMessage,
         useWebSearch

@@ -1,0 +1,5 @@
+{
+  "system": "You are a career counselor and job description analyzer.",
+  "message": "Analyze this job description for Senior Software Engineer.",
+  "useWebSearch": true
+}
