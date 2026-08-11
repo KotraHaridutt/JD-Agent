@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { AppError } from './AppError';
 
 export interface SanitizedErrorResponseBody {
   error: string;
@@ -45,6 +46,7 @@ export function sanitizeErrorResponse(error: unknown, correlationId: string): Sa
   const err = error as any;
   const status = typeof err?.status === 'number' ? err.status : 500;
   const code = typeof err?.code === 'string' ? err.code : 'SERVER_ERROR';
+  const isTrustedAppError = error instanceof AppError || err?.name === 'AppError';
 
   // Upstream OpenAI errors (4xx, 5xx, or specific OpenAI codes) - evaluated BEFORE generic status code checks
   if (
@@ -103,10 +105,10 @@ export function sanitizeErrorResponse(error: unknown, correlationId: string): Sa
 
   // Default / Internal Server Errors (500)
   return {
-    status: typeof err?.status === 'number' ? err.status : 500,
+    status: isTrustedAppError && typeof err?.status === 'number' ? err.status : 500,
     body: {
-      error: typeof err?.message === 'string' && err.message.trim() ? err.message : 'Unexpected server error',
-      code: typeof err?.code === 'string' ? err.code : 'SERVER_ERROR',
+      error: isTrustedAppError && typeof err?.message === 'string' && err.message.trim() ? err.message : 'Unexpected server error',
+      code: isTrustedAppError && typeof err?.code === 'string' ? err.code : 'SERVER_ERROR',
       correlationId
     }
   };
