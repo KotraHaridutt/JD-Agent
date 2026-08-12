@@ -30,5 +30,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# coverage
+# coverage and test artifacts
 coverage/
+.vitest/
