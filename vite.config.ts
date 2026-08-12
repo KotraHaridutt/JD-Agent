@@ -10,6 +10,7 @@ import {
   logServerError
 } from './api/lib/errorHandler'
 import { AppError } from './api/lib/AppError'
+import { getServerConfig } from './src/lib/config/env'
 
 function devAnalyzePlugin(mode: string): Plugin {
   return {
@@ -17,8 +18,6 @@ function devAnalyzePlugin(mode: string): Plugin {
     configureServer(server) {
       const env = loadEnv(mode, process.cwd(), '');
       process.env.API_KEY = env.API_KEY ?? process.env.API_KEY;
-      process.env.OPENAI_API_KEY = env.OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-      process.env.OPENAI_MODEL = env.OPENAI_MODEL ?? process.env.OPENAI_MODEL;
       process.env.SKIP_RATE_LIMIT = env.SKIP_RATE_LIMIT ?? process.env.SKIP_RATE_LIMIT;
 
       server.middlewares.use(async (req, res, next) => {
@@ -99,7 +98,8 @@ function devAnalyzePlugin(mode: string): Plugin {
             return;
           }
 
-          const result = await analyzeRequest(validationResult.data);
+          const config = getServerConfig(env);
+          const result = await analyzeRequest(validationResult.data, config);
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ...result, correlationId }));

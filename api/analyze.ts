@@ -7,6 +7,7 @@ import {
   logServerError
 } from './lib/errorHandler';
 import { AppError } from './lib/AppError';
+import { getServerConfig, ServerConfig } from '../src/lib/config/env';
 
 export default async function handler(req: any, res: any): Promise<void> {
   const correlationId = getOrGenerateCorrelationId(req);
@@ -79,13 +80,10 @@ export default async function handler(req: any, res: any): Promise<void> {
   }
 }
 
-export async function analyzeRequest(body: AnalyzeRequest): Promise<any> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new AppError('OPENAI_API_KEY is not configured on the server', 500, 'OPENAI_KEY_MISSING');
-  }
-
-  const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+export async function analyzeRequest(body: AnalyzeRequest, config?: ServerConfig): Promise<any> {
+  const resolvedConfig = config ?? getServerConfig();
+  const apiKey = resolvedConfig.apiKey;
+  const model = resolvedConfig.model;
 
   const payload: Record<string, unknown> = {
     model,
