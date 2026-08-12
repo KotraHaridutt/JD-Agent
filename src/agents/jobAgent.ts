@@ -4,7 +4,14 @@ import {
   CompanyReportSchema,
   SynthesisReportSchema
 } from '../schemas';
-import type { JobAgentResult } from '../types';
+import type {
+  JobAgentResult,
+  ResumeProfile,
+  CompanyReport,
+  SynthesisReport,
+  FitLabel,
+  GapType
+} from '../types';
 
 const ORCHESTRATOR_SYSTEM_PROMPT = `You are a resume parser. Extract a structured skill profile 
 from the resume. For each skill, extract EVIDENCE — where 
@@ -167,7 +174,7 @@ export async function runJobAgent(
   }
 }
 
-async function analyzeCompany(company: string, role: string, timeline: string, profile: any) {
+export async function analyzeCompany(company: string, role: string, timeline: string, profile: any) {
   const roleVariants = buildRoleVariants(role);
   let lastReport: any = null;
 
@@ -191,7 +198,7 @@ async function analyzeCompany(company: string, role: string, timeline: string, p
   return CompanyReportSchema.parse(lastReport ?? { company, role });
 }
 
-function buildRoleVariants(role: string): string[] {
+export function buildRoleVariants(role: string): string[] {
   const normalizedRole = role.trim();
   const lowerRole = normalizedRole.toLowerCase();
   const variants = [normalizedRole];
@@ -215,7 +222,7 @@ function buildRoleVariants(role: string): string[] {
   return Array.from(new Set(variants.filter(Boolean)));
 }
 
-function buildSearchHints(company: string, roleVariant: string): string[] {
+export function buildSearchHints(company: string, roleVariant: string): string[] {
   const normalizedCompany = company.trim().toLowerCase();
 
   if (normalizedCompany.includes('stripe')) {
@@ -291,4 +298,227 @@ function buildSearchHints(company: string, roleVariant: string): string[] {
     `site:smartrecruiters.com "${company}" "${roleVariant}"`,
     `site:ashbyhq.com "${company}" "${roleVariant}"`
   ];
+}
+
+/**
+ * Normalization helper functions exported for testability & characterization tests.
+ */
+export function isPlainObject(val: unknown): boolean {
+  return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+export function asStringArray(val: unknown): string[] {
+  if (!Array.isArray(val)) {
+    return [];
+  }
+  return val.filter((item): item is string => typeof item === 'string');
+}
+
+export function normalizeFitLabel(val: unknown): FitLabel {
+  if (val === 'APPLY_NOW' || val === 'APPLY_AFTER_PREP' || val === 'SKIP') {
+    return val;
+  }
+  return 'SKIP';
+}
+
+export function normalizeGapType(val: unknown): GapType {
+  if (val === 'STRONG_MATCH' || val === 'PARTIAL_MATCH' || val === 'REAL_GAP') {
+    return val;
+  }
+  return 'REAL_GAP';
+}
+
+export function normalizeProfile(val: unknown): ResumeProfile {
+  if (!isPlainObject(val)) {
+    return {
+      languages: [],
+      frameworks: [],
+      databases: [],
+      infra: [],
+      domains: [],
+      projects: [],
+      depth_signals: {}
+    };
+  }
+
+  const obj = val as Record<string, any>;
+  const rawProjects = Array.isArray(obj.projects) ? obj.projects : [];
+  const projects = rawProjects.map((p: any) => {
+    if (!isPlainObject(p)) {
+      return { name: '', stack: [], signals: [] };
+    }
+    return {
+      name: typeof p.name === 'string' ? p.name : String(p.name ?? ''),
+      stack: asStringArray(p.stack),
+      signals: asStringArray(p.signals)
+    };
+  });
+
+  const rawSignals = isPlainObject(obj.depth_signals) ? obj.depth_signals : {};
+  const depth_signals: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawSignals)) {
+    if (typeof v === 'string') {
+      depth_signals[k] = v;
+    }
+  }
+
+  return {
+    languages: asStringArray(obj.languages),
+    frameworks: asStringArray(obj.frameworks),
+    databases: asStringArray(obj.databases),
+    infra: asStringArray(obj.infra),
+    domains: asStringArray(obj.domains),
+    projects,
+    depth_signals
+  };
+}
+
+export function normalizeCompanyReport(val: unknown): CompanyReport {
+  if (!isPlainObject(val)) {
+    return {
+      company: 'Unknown Company',
+      role: '',
+      jd_url: 'simulated',
+      source_title: 'Unknown Company',
+      proof_note: 'No live posting found after checking official/ATS sources for Unknown Company across multiple backend role variants. The proof is the search trail plus the gap-level evidence below.',
+      search_terms: [],
+      jd_freshness: '',
+      fit_label: 'SKIP',
+      match_score: 0,
+      strengths: [],
+      gaps: [],
+      top_3_actions: []
+    };
+  }
+
+  const obj = val as Record<string, any>;
+  const company = typeof obj.company === 'string' && obj.company.trim() ? obj.company : 'Unknown Company';
+  const role = typeof obj.role === 'string' ? obj.role : '';
+  const jd_url = typeof obj.jd_url === 'string' && obj.jd_url.trim() ? obj.jd_url : 'simulated';
+  const source_title = typeof obj.source_title === 'string' && obj.source_title.trim() ? obj.source_title : company;
+
+  const proof_note =
+    typeof obj.proof_note === 'string' && obj.proof_note.trim()
+      ? obj.proof_note
+      : jd_url === 'simulated'
+        ? `No live posting found after checking official/ATS sources for ${company} across multiple backend role variants. The proof is the search trail plus the gap-level evidence below.`
+        : `JD source reviewed for ${company}: ${source_title}`;
+
+  const rawMatchScore = Number(obj.match_score);
+  const match_score = isNaN(rawMatchScore) ? 0 : rawMatchScore;
+
+  const rawGaps = Array.isArray(obj.gaps) ? obj.gaps : [];
+  const gaps = rawGaps.map((g: any) => {
+    if (!isPlainObject(g)) {
+      return {
+        jd_says: '',
+        jd_means: '',
+        candidate_has: '',
+        gap_type: 'REAL_GAP' as GapType,
+        bridge: '',
+        time_estimate: '',
+        resource: ''
+      };
+    }
+    return {
+      jd_says: typeof g.jd_says === 'string' ? g.jd_says : '',
+      jd_means: typeof g.jd_means === 'string' ? g.jd_means : '',
+      candidate_has: typeof g.candidate_has === 'string' ? g.candidate_has : '',
+      gap_type: normalizeGapType(g.gap_type),
+      bridge: typeof g.bridge === 'string' ? g.bridge : '',
+      time_estimate: typeof g.time_estimate === 'string' ? g.time_estimate : '',
+      resource: typeof g.resource === 'string' ? g.resource : ''
+    };
+  });
+
+  return {
+    company,
+    role,
+    jd_url,
+    source_title,
+    proof_note,
+    search_terms: asStringArray(obj.search_terms),
+    jd_freshness: typeof obj.jd_freshness === 'string' ? obj.jd_freshness : '',
+    fit_label: normalizeFitLabel(obj.fit_label),
+    match_score,
+    strengths: asStringArray(obj.strengths),
+    gaps,
+    top_3_actions: asStringArray(obj.top_3_actions)
+  };
+}
+
+export function normalizeSynthesisReport(val: unknown): SynthesisReport {
+  const defaultTodayAction = {
+    what: 'Review the strongest cross-company gap',
+    resource: '',
+    time: '',
+    why: '',
+    helps_for: []
+  };
+
+  if (!isPlainObject(val)) {
+    return {
+      priority_gaps: [],
+      company_ranking: [],
+      today_action: defaultTodayAction
+    };
+  }
+
+  const obj = val as Record<string, any>;
+
+  const rawGaps = Array.isArray(obj.priority_gaps) ? obj.priority_gaps : [];
+  const priority_gaps = rawGaps.map((g: any) => {
+    if (!isPlainObject(g)) {
+      return {
+        skill: '',
+        companies_needing: [],
+        priority_rank: 0,
+        action: '',
+        resource: '',
+        time_estimate: ''
+      };
+    }
+    const rank = Number(g.priority_rank);
+    return {
+      skill: typeof g.skill === 'string' ? g.skill : '',
+      companies_needing: asStringArray(g.companies_needing),
+      priority_rank: isNaN(rank) ? 0 : rank,
+      action: typeof g.action === 'string' ? g.action : '',
+      resource: typeof g.resource === 'string' ? g.resource : '',
+      time_estimate: typeof g.time_estimate === 'string' ? g.time_estimate : ''
+    };
+  });
+
+  const rawRanking = Array.isArray(obj.company_ranking) ? obj.company_ranking : [];
+  const company_ranking = rawRanking.map((r: any) => {
+    if (!isPlainObject(r)) {
+      return {
+        company: 'Unknown Company',
+        fit_label: 'SKIP' as FitLabel,
+        reason: '',
+        apply_after: ''
+      };
+    }
+    return {
+      company: typeof r.company === 'string' ? r.company : 'Unknown Company',
+      fit_label: normalizeFitLabel(r.fit_label),
+      reason: typeof r.reason === 'string' ? r.reason : '',
+      apply_after: typeof r.apply_after === 'string' ? r.apply_after : ''
+    };
+  });
+
+  const rawToday = isPlainObject(obj.today_action) ? obj.today_action : {};
+  const today_action = {
+    what: typeof rawToday.what === 'string' && rawToday.what.trim() ? rawToday.what : defaultTodayAction.what,
+    resource: typeof rawToday.resource === 'string' ? rawToday.resource : '',
+    time: typeof rawToday.time === 'string' ? rawToday.time : '',
+    why: typeof rawToday.why === 'string' ? rawToday.why : '',
+    helps_for: asStringArray(rawToday.helps_for)
+  };
+
+  return {
+    priority_gaps,
+    company_ranking,
+    today_action
+  };
 }
