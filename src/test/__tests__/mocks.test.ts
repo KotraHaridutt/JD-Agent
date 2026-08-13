@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { MockRedisClient } from '../mocks/redis';
 import { createOpenAIMock } from '../mocks/openai';
 import { createMockRequest, createMockResponse } from '../helpers';

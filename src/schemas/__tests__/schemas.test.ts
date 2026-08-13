@@ -9,7 +9,6 @@ import {
   SynthesisReportSchema,
   PriorityGapSchema,
   CompanyRankingInfoSchema,
-  TodayActionSchema,
   AnalyzeRequestSchema,
   validateAnalyzeRequest,
   sanitizeString,
@@ -24,13 +23,11 @@ import {
 
 import {
   VALID_COMPANY_REPORT,
-  SIMULATED_COMPANY_REPORT,
-  MALFORMED_COMPANY_REPORT
+  SIMULATED_COMPANY_REPORT
 } from '../../test/fixtures/company-report';
 
 import {
-  VALID_SYNTHESIS_REPORT,
-  MALFORMED_SYNTHESIS_REPORT
+  VALID_SYNTHESIS_REPORT
 } from '../../test/fixtures/synthesis-report';
 
 describe('ResumeProfileSchema & ProjectSchema', () => {

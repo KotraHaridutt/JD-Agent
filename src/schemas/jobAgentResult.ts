@@ -31,4 +31,8 @@ export const JobAgentResultSchema = z.object({
   synthesis: SynthesisReportSchema.catch(defaultSynthesisReport).default(defaultSynthesisReport)
 });
 
-export type JobAgentResult = z.infer<typeof JobAgentResultSchema>;
+export type JobAgentResult = {
+  profile: z.infer<typeof ResumeProfileSchema>;
+  jdReports: z.infer<typeof CompanyReportSchema>[];
+  synthesis: z.infer<typeof SynthesisReportSchema>;
+};

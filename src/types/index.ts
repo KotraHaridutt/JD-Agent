@@ -9,8 +9,7 @@ import type {
   PriorityGapSchema,
   CompanyRankingInfoSchema,
   TodayActionSchema,
-  SynthesisReportSchema,
-  JobAgentResultSchema
+  SynthesisReportSchema
 } from '../schemas';
 
 export type ResumeProfile = z.infer<typeof ResumeProfileSchema>;
@@ -27,4 +26,8 @@ export type CompanyRankingInfo = z.infer<typeof CompanyRankingInfoSchema>;
 export type TodayAction = z.infer<typeof TodayActionSchema>;
 export type SynthesisReport = z.infer<typeof SynthesisReportSchema>;
 
-export type JobAgentResult = z.infer<typeof JobAgentResultSchema>;
+export type JobAgentResult = {
+  profile: ResumeProfile;
+  jdReports: CompanyReport[];
+  synthesis: SynthesisReport;
+};

@@ -28,8 +28,7 @@ import {
 } from '../../test/fixtures/company-report';
 
 import {
-  VALID_SYNTHESIS_REPORT,
-  MALFORMED_SYNTHESIS_REPORT
+  VALID_SYNTHESIS_REPORT
 } from '../../test/fixtures/synthesis-report';
 
 vi.mock('../../api/llmClient', () => ({
@@ -337,7 +336,7 @@ describe('analyzeCompany function', () => {
 
     const report = await analyzeCompany('Acme', 'Backend SDE', '2 weeks', VALID_RESUME_PROFILE);
     expect(report.jd_url).toBe('simulated');
-    expect(mockCallLLMWithValidation).toHaveBeenCalledGreaterThan(1);
+    expect(mockCallLLMWithValidation.mock.calls.length).toBeGreaterThan(1);
   });
 });
 
