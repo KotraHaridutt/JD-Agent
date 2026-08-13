@@ -8,6 +8,9 @@ build/
 # Vite cache
 .vite/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Vercel
 .vercel/
 

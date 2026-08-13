@@ -1,10 +1,8 @@
 import crypto from 'crypto';
 
-export interface AuthValidationResult {
-  valid: boolean;
-  code?: 'AUTH_REQUIRED' | 'AUTH_INVALID';
-  error?: string;
-}
+export type AuthValidationResult =
+  | { valid: true }
+  | { valid: false; code: 'AUTH_REQUIRED' | 'AUTH_INVALID'; error: string };
 
 /**
  * Validates an incoming API key against the server-configured key using constant-time comparison.

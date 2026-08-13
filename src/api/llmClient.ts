@@ -77,7 +77,7 @@ export async function callLLM({ system, message, useWebSearch = false }: CallLLM
  */
 export async function callLLMWithValidation<T>(
   params: CallLLMParams,
-  schema: ZodType<T>,
+  schema: ZodType<T, any, any>,
   maxRetries: number = 2
 ): Promise<T> {
   let currentMessage = params.message;
