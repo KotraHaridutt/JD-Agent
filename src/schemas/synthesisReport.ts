@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FitLabelEnum } from './companyReport';
+import { FitLabelEnum } from './companyReport.js';
 
 export const PriorityGapSchema = z.object({
   skill: z.string().catch('').default(''),

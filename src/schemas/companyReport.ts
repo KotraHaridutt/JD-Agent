@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GapInfoSchema } from './gapInfo';
+import { GapInfoSchema } from './gapInfo.js';
 
 export const FitLabelEnum = z.enum(['APPLY_NOW', 'APPLY_AFTER_PREP', 'SKIP']);
 export type FitLabel = z.infer<typeof FitLabelEnum>;

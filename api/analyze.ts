@@ -1,13 +1,13 @@
-import { validateApiKey } from './middleware/auth';
-import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit';
-import { validateAnalyzeRequest, AnalyzeRequest } from '../src/schemas';
+import { validateApiKey } from './middleware/auth.js';
+import { checkRateLimit, extractClientIp, RateLimitResult } from './middleware/rateLimit.js';
+import { validateAnalyzeRequest, AnalyzeRequest } from '../src/schemas/index.js';
 import {
   getOrGenerateCorrelationId,
   sanitizeErrorResponse,
   logServerError
-} from './lib/errorHandler';
-import { AppError } from './lib/AppError';
-import { getServerConfig, ServerConfig } from '../src/lib/config/env';
+} from './lib/errorHandler.js';
+import { AppError } from './lib/AppError.js';
+import { getServerConfig, ServerConfig } from '../src/lib/config/env.js';
 
 export default async function handler(req: any, res: any): Promise<void> {
   const correlationId = getOrGenerateCorrelationId(req);

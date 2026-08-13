@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResumeProfileSchema } from './resumeProfile';
-import { CompanyReportSchema } from './companyReport';
-import { SynthesisReportSchema } from './synthesisReport';
+import { ResumeProfileSchema } from './resumeProfile.js';
+import { CompanyReportSchema } from './companyReport.js';
+import { SynthesisReportSchema } from './synthesisReport.js';
 
 const defaultResumeProfile = {
   languages: [],

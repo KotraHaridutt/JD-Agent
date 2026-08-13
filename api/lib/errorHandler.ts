@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { AppError } from './AppError';
+import { AppError } from './AppError.js';
 
 export interface SanitizedErrorResponseBody {
   error: string;
