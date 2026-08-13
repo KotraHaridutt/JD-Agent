@@ -1,0 +1,149 @@
+# Vercel Automated Deployment Workflow
+#
+# REQUIRED GITHUB REPOSITORY SECRETS:
+# - VERCEL_TOKEN: Personal Access Token generated in Vercel Account Settings.
+# - VERCEL_ORG_ID: Vercel Team/User ID (found in project .vercel/project.json or Org Settings).
+# - VERCEL_PROJECT_ID: Vercel Project ID (found in project .vercel/project.json or Project Settings).
+#
+# NOTE ON PLAN CONSTRAINTS:
+# - vercel.json configures maxDuration: 60 for api/analyze.ts, which requires a Vercel Pro plan.
+# - On the Free/Hobby plan, maxDuration defaults to 10s.
+
+name: Deploy to Vercel
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_run:
+    workflows: ["CI Quality Gate"]
+    types: [ completed ]
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
+
+jobs:
+  preview-deploy:
+    name: Preview Deployment (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel Preview
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Post Preview URL as PR Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const previewUrl = '${{ steps.deploy.outputs.preview_url }}';
+            const commentBody = `### 🚀 Vercel Preview Deployment\n\n**Preview URL:** ${previewUrl}\n\n*Deployed automatically for PR #${context.issue.number}.*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
+
+      - name: Make health check script executable
+        run: chmod +x ./scripts/health-check.sh
+
+      - name: Run Post-Deployment Health Check
+        run: ./scripts/health-check.sh "${{ steps.deploy.outputs.preview_url }}"
+
+      - name: Report Failure & Rollback Instructions
+        if: failure()
+        run: |
+          echo "========================================================================"
+          echo "FAILURE: Preview deployment or health check failed!"
+          echo "Instructions to rollback / investigate:"
+          echo "  vercel rollback --token=\${{ secrets.VERCEL_TOKEN }}"
+          echo "========================================================================"
+
+  production-deploy:
+    name: Production Deployment (Main)
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Production Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build Project Artifacts for Production
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel Production
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "prod_url=$URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Make health check script executable
+        run: chmod +x ./scripts/health-check.sh
+
+      - name: Run Post-Deployment Health Check
+        run: ./scripts/health-check.sh "${{ steps.deploy.outputs.prod_url }}"
+
+      - name: Report Failure & Rollback Instructions
+        if: failure()
+        run: |
+          echo "========================================================================"
+          echo "FAILURE: Production deployment or health check failed!"
+          echo "To rollback to the previous production deployment, run:"
+          echo "  vercel rollback --token=\${{ secrets.VERCEL_TOKEN }}"
+          echo "Or initiate a rollback via the Vercel Dashboard."
+          echo "========================================================================"

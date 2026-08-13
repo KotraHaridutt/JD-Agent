@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/analyze.ts": {
-      "maxDuration": 90
+      "maxDuration": 60
     }
   },
   "headers": [
