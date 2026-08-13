@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   runJobAgent,
   analyzeCompany,
@@ -17,14 +17,12 @@ import { callLLMWithValidation } from '../../api/llmClient';
 
 import {
   VALID_RESUME_PROFILE,
-  MINIMAL_RESUME_PROFILE,
-  MALFORMED_RESUME_PROFILE
+  MINIMAL_RESUME_PROFILE
 } from '../../test/fixtures/resume-profile';
 
 import {
   VALID_COMPANY_REPORT,
-  SIMULATED_COMPANY_REPORT,
-  MALFORMED_COMPANY_REPORT
+  SIMULATED_COMPANY_REPORT
 } from '../../test/fixtures/company-report';
 
 import {
